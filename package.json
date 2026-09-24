@@ -1,0 +1,9 @@
+{
+  "name": "lpg-design",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LPガスの必要ガス量と容器の大きさ・本数を算出する設計支援ツール",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
