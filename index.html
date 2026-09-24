@@ -265,15 +265,60 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 .results { display: grid; gap: 20px; }
 
-/* 係数表 */
-.coef-table input[type="number"], .coef-table input[type="text"] { font-size: 15px; padding: 7px 9px; }
-.coef-table input[type="text"] { font-family: var(--body); }
-.coef-table td { padding: 8px 10px; }
-.coef-table td:first-child { width: 56px; text-align: center; }
-.coef-table input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
-.coef-table .w-name { min-width: 130px; }
-.coef-table .w-num { min-width: 110px; }
-.coef-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* 選択肢 */
+select {
+  font: 500 15px/1.3 var(--body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  width: 100%;
+}
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--sunken); }
+.seg label { flex: 1; position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span {
+  display: block; text-align: center;
+  padding: 8px 10px;
+  font-size: 13.5px; font-weight: 500;
+  color: var(--muted);
+}
+.seg label + label span { border-left: 1px solid var(--line); }
+.seg input:checked + span { background: var(--surface); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 700; }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg input:disabled + span { opacity: .45; cursor: not-allowed; }
+.seg.small span { padding: 5px 10px; font: 500 12.5px/1.2 var(--mono); }
+.label-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.divider { border: 0; border-top: 1px solid var(--line); margin: 0; }
+.type-chip {
+  display: grid; gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+}
+.type-chip b { font-size: 14px; }
+.type-chip small { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+.alerts { display: grid; gap: 8px; }
+.alert { border-radius: 8px; padding: 10px 14px; font-size: 13.5px; border: 1px solid; }
+.alert.warn { border-color: var(--warn); background: var(--warn-soft); }
+.alert.info { border-color: var(--line); background: var(--surface); color: var(--muted); }
+
+.reco-facts { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.reco-facts b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+td.na { color: var(--muted); }
+td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
+
+/* ガス発生能力表 */
+.gen-table th, .gen-table td { text-align: center; padding: 8px 10px; }
+.gen-table th:first-child, .gen-table td:first-child { text-align: left; }
+.gen-table td.sel { background: var(--accent); color: var(--surface); font-weight: 600; }
+.gen-table td.na { color: var(--line); }
+.gen-meta { font-size: 13px; color: var(--muted); }
 
 .formula { display: grid; gap: 10px; color: var(--muted); font-size: 14px; }
 .formula ol { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
@@ -295,14 +340,14 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">LPG Supply Design</div>
+    <div class="eyebrow">LPG Supply Design ・ 自然気化方式</div>
     <h1>LPガス容器設計</h1>
-    <p class="lead">1件あたりのガス消費量・件数・同時使用率から1時間あたりの必要ガス量を算出し、それをまかなえる容器の大きさと本数を求めます。</p>
+    <p class="lead">1件あたりのガス消費量・件数・同時使用率から1時間あたりの必要ガス量を算出し、標準のガス発生能力表をもとに容器の大きさと設置本数を求めます。</p>
   </header>
 
-  <div id="coef-notice" class="notice">
-    <strong>係数は暫定値です</strong>
-    <span>換算係数と容器1本あたりのガス発生能力は、参考資料で確認できていない仮の値です。下の「係数設定」で実際の設計基準の値に置き換え、確認済みにチェックしてから結果を使ってください。</span>
+  <div id="coef-notice" class="notice" hidden>
+    <strong>m³/h から kg/h への換算係数は暫定値です</strong>
+    <span>参考資料には気体の体積（m³）と質量（kg）の換算係数が記載されていないため、仮に 2.0 kg/m³ としています。下の「係数設定」で正しい値に置き換え、確認済みにチェックしてください。kW で入力する場合はこの係数を使いません。</span>
   </div>
 
   <div class="layout">
@@ -310,17 +355,31 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
       <h2>設計条件</h2>
 
       <div class="field">
-        <label for="perUnit">1件あたりのガス消費量</label>
-        <div class="input-unit">
-          <input id="perUnit" type="number" inputmode="decimal" step="0.01" min="0">
-          <span class="unit">m³/h</span>
+        <span class="label">用途</span>
+        <div class="seg" role="radiogroup" aria-label="用途">
+          <label><input type="radio" name="usage" id="usage-res" value="residential"><span>一般住宅</span></label>
+          <label><input type="radio" name="usage" id="usage-biz" value="business"><span>業務用</span></label>
         </div>
-        <div class="hint">その住戸・店舗で使用する燃焼器具の最大ガス消費量の合計。</div>
-        <div class="err" id="err-perUnitM3h" hidden></div>
       </div>
 
       <div class="field">
-        <label for="units">建物全体の件数</label>
+        <div class="label-row">
+          <label for="perUnit">1件あたりのガス消費量</label>
+          <div class="seg small" role="radiogroup" aria-label="入力単位">
+            <label><input type="radio" name="inputUnit" id="unit-m3h" value="m3h"><span>m³/h</span></label>
+            <label><input type="radio" name="inputUnit" id="unit-kw" value="kw"><span>kW</span></label>
+          </div>
+        </div>
+        <div class="input-unit">
+          <input id="perUnit" type="number" inputmode="decimal" step="0.01" min="0">
+          <span class="unit" id="perUnit-unit">m³/h</span>
+        </div>
+        <div class="hint">その住戸・店舗の燃焼器具の最大ガス消費量の合計。</div>
+        <div class="err" id="err-perUnit" hidden></div>
+      </div>
+
+      <div class="field">
+        <label for="units" id="units-label">建物全体の件数</label>
         <div class="input-unit">
           <input id="units" type="number" inputmode="numeric" step="1" min="1">
           <span class="unit">件</span>
@@ -337,16 +396,67 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
             <span class="unit">%</span>
           </div>
         </div>
-        <div class="hint">全件の最大消費量のうち、同じ時間帯に使われる割合。</div>
+        <div class="hint">全件の消費量合計のうち、ピーク時に同時に使われる割合（最大ガス消費率）。</div>
         <div class="err" id="err-simultaneityPct" hidden></div>
       </div>
 
-      <label class="check" for="spare">
-        <input id="spare" type="checkbox">
-        <span>予備側を設ける（自動切替式）
-          <small>使用側と同じ本数を予備側に置き、設置本数を2倍にします。</small>
+      <hr class="divider">
+
+      <div class="type-chip">
+        <b id="type-name">–</b>
+        <small id="type-desc"></small>
+      </div>
+
+      <div class="field" id="series-field">
+        <span class="label">供給系列</span>
+        <div class="seg" role="radiogroup" aria-label="供給系列">
+          <label><input type="radio" name="series" id="series-1" value="1"><span>1系列</span></label>
+          <label><input type="radio" name="series" id="series-2" value="2"><span>2系列</span></label>
+        </div>
+        <div class="hint">1系列は最大ガス消費量の1.1倍、2系列は70%の1.1倍で本数を算定します。</div>
+      </div>
+
+      <label class="check" for="monitored" id="monitored-field">
+        <input id="monitored" type="checkbox">
+        <span>集中監視システムで残量管理している
+          <small>安全率1.1を1.0にします。</small>
         </span>
       </label>
+
+      <div class="field">
+        <span class="label">調整器</span>
+        <div class="seg" role="radiogroup" aria-label="調整器">
+          <label><input type="radio" name="regulator" id="reg-auto" value="auto"><span>自動切替式</span></label>
+          <label><input type="radio" name="regulator" id="reg-single" value="single"><span>単段</span></label>
+        </div>
+        <div class="hint" id="reg-hint">自動切替式は予備側を考慮して設置本数を2倍にします。</div>
+      </div>
+
+      <div class="field">
+        <label for="gas">供給ガス</label>
+        <select id="gas"></select>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="temp">ピーク時の気温</label>
+          <select id="temp"></select>
+        </div>
+        <div class="field">
+          <label for="peak">ピーク時間</label>
+          <select id="peak"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="monthly">1件あたり1か月のガス消費量（任意）</label>
+        <div class="input-unit">
+          <input id="monthly" type="number" inputmode="decimal" step="1" min="0" placeholder="例 20">
+          <span class="unit">kg/月</span>
+        </div>
+        <div class="hint">入力すると容器交換周期の目安を表示します。</div>
+        <div class="err" id="err-monthlyKgPerUnit" hidden></div>
+      </div>
 
       <button type="button" id="reset">入力例に戻す</button>
     </form>
@@ -354,137 +464,131 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     <section class="results" aria-live="polite">
       <div class="flow">
         <div class="step">
-          <span class="k">最大ガス消費量</span>
-          <span class="v"><span id="o-total">–</span><small>m³/h</small></span>
+          <span class="k">消費量の合計</span>
+          <span class="v"><span id="o-total">–</span><small id="o-total-u"></small></span>
           <span class="f" id="f-total"></span>
         </div>
         <div class="step key">
-          <span class="k">必要ガス量（1時間あたり）</span>
-          <span class="v"><span id="o-peak">–</span><small>m³/h</small></span>
+          <span class="k">必要ガス量（最大ガス消費量）</span>
+          <span class="v"><span id="o-peak">–</span><small id="o-peak-u"></small></span>
           <span class="f" id="f-peak"></span>
         </div>
         <div class="step">
-          <span class="k">質量換算</span>
-          <span class="v"><span id="o-kg">–</span><small>kg/h</small></span>
-          <span class="f" id="f-kg"></span>
+          <span class="k">本数算定に使うガス量</span>
+          <span class="v"><span id="o-design">–</span><small>kg/h</small></span>
+          <span class="f" id="f-design"></span>
         </div>
       </div>
 
+      <div class="alerts" id="alerts"></div>
+
       <div class="panel">
-        <div class="reco" id="reco">
+        <div class="reco">
           <div class="reco-main">
             <span class="eyebrow">推奨構成</span>
             <div class="reco-title" id="reco-title">–</div>
             <div class="reco-sub" id="reco-sub"></div>
+            <div class="reco-facts" id="reco-facts"></div>
           </div>
           <div class="rack" id="rack"></div>
         </div>
       </div>
 
-      <div class="section-head"><h2>容器サイズ別の必要本数</h2></div>
+      <div class="section-head"><h2>容器サイズ別の設置本数</h2></div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th>容器</th>
               <th>ガス発生能力<br>kg/h・本</th>
+              <th>計算値<br>本</th>
               <th>使用側<br>本</th>
               <th>設置本数<br>本</th>
               <th>供給能力<br>kg/h</th>
-              <th>余裕<br>%</th>
               <th>貯蔵量<br>kg</th>
+              <th>交換周期<br>目安</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <div class="err" id="err-cylinders" hidden></div>
     </section>
   </div>
+
+  <section class="panel">
+    <div class="section-head">
+      <h2>参照したガス発生能力</h2>
+    </div>
+    <div class="gen-meta" id="gen-meta"></div>
+    <div class="table-wrap">
+      <table class="gen-table">
+        <thead id="gen-head"></thead>
+        <tbody id="gen-body"></tbody>
+      </table>
+    </div>
+    <div class="gen-meta">単位 kg/h・本。「－」は参考資料にデータがない条件です。ピーク時間5時間以上を連続使用とします。</div>
+  </section>
 
   <section class="panel" id="coef">
     <div class="section-head">
       <h2>係数設定</h2>
       <span class="pill warn" id="coef-pill">暫定値</span>
     </div>
-
     <div class="field" style="max-width: 360px;">
       <label for="kgPerM3">換算係数（気体1m³あたりの質量）</label>
       <div class="input-unit">
         <input id="kgPerM3" type="number" inputmode="decimal" step="0.001" min="0">
         <span class="unit">kg/m³</span>
       </div>
-      <div class="hint">暫定値 2.0（1kg ≒ 0.5m³ として換算）。</div>
+      <div class="hint">m³/h で入力したときだけ使います。暫定値 2.0（1kg ≒ 0.5m³）。</div>
       <div class="err" id="err-kgPerM3" hidden></div>
     </div>
-
-    <div class="field">
-      <span class="label">容器1本あたりのガス発生能力</span>
-      <span class="hint">自然気化で1本が1時間に供給できるガス量。外気温・連続使用時間・残液量で変わるため、設計条件に合う値を入力してください。</span>
-    </div>
-    <div class="table-wrap coef-table">
-      <table>
-        <thead>
-          <tr><th>計算対象</th><th>名称</th><th>充てん量 kg</th><th>ガス発生能力 kg/h</th><th></th></tr>
-        </thead>
-        <tbody id="coef-rows"></tbody>
-      </table>
-    </div>
-    <div class="coef-actions">
-      <button type="button" id="add-cyl">容器を追加</button>
-      <button type="button" id="reset-coef">係数を暫定値に戻す</button>
-    </div>
-
     <label class="check" for="confirmed">
       <input id="confirmed" type="checkbox">
-      <span>上記の係数を設計基準・参考資料の値で確認しました</span>
+      <span>換算係数を確認しました</span>
     </label>
+    <div class="gen-meta">kW と kg/h の換算は参考資料の算定式どおり 1kg/h = 14kW で固定しています。</div>
   </section>
 
   <section class="panel formula">
-    <h2 style="color: var(--ink);">計算方法</h2>
+    <h2 style="color: var(--ink);">計算方法（参考資料 4.2 容器本数の決定）</h2>
     <ol>
-      <li>最大ガス消費量 <code>Q_max = 1件あたりの消費量 × 件数</code></li>
-      <li>必要ガス量 <code>Q = Q_max × 同時使用率 ÷ 100</code></li>
-      <li>質量換算 <code>W = Q × 換算係数</code></li>
-      <li>使用側本数 <code>N = W ÷ 1本あたりのガス発生能力</code>（小数点以下切り上げ、最低1本）</li>
-      <li>設置本数 <code>予備側あり: N × 2 ／ 予備側なし: N</code></li>
+      <li>必要ガス量 <code>Q [kW] = 1件あたりの消費量 × 件数 × 同時使用率</code>（m³/h 入力は <code>× 換算係数 × 14</code> で kW に換算）</li>
+      <li>戸別・業務用 <code>N = Q ÷ (V × 14)</code></li>
+      <li>小規模集団（2〜10戸）1系列 <code>N = Q × 1.1 ÷ (V × 14)</code></li>
+      <li>小・中規模集団（2〜69戸）2系列 <code>N = Q × 0.7 × 1.1 ÷ (V × 14)</code>（集中監視で残量管理する場合は 1.1 → 1.0）</li>
+      <li>使用側本数は N を切り上げ（最低1本）。自動切替式調整器では予備側を考慮して <code>設置本数 = 使用側 × 2</code></li>
+      <li>自動切替式調整器の能力 <code>Q × 1.0 ÷ 14 [kg/h] 以上</code></li>
     </ol>
-    <p style="margin: 0;">推奨構成は設置本数が最も少ない容器です。本数が同じ場合は供給能力の余裕が小さい方を選びます。</p>
+    <p style="margin: 0;">V は標準のガス発生能力 [kg/h・本]。自動切替式は表Ⅱ－4－1（50kg容器）、単段は表Ⅱ－4－2（50・20・10kg容器）、−10℃以下は寒冷地の参考表、30分は短時間消費の参考表から引きます。集団供給方式は自動切替式調整器を使用します。推奨構成は設置本数が最も少ない容器（業務用は原則50kg容器）です。</p>
   </section>
 
-  <p class="foot">入力内容はこのブラウザにのみ保存されます。計算結果は設計の目安です。最終的な設備設計は法令・設計基準に基づいて行ってください。</p>
+  <p class="foot">入力内容はこのブラウザにのみ保存されます。計算結果は設計の目安です。強制気化方式・70戸以上（ガス事業法）には対応していません。最終的な設備設計は法令・設計基準に基づいて行ってください。</p>
 </div>
 
 <script src="calc.js"></script>
 <script>
 (function () {
   'use strict';
-  var STORE_KEY = 'lpg-design-v1';
-  var SAMPLE = { perUnitM3h: 1.2, units: 6, simultaneityPct: 50, spare: true };
+  var STORE_KEY = 'lpg-design-v2';
+  var SAMPLE = {
+    usage: 'residential', inputUnit: 'm3h', perUnit: 1.2, units: 6, simultaneityPct: 50,
+    series: 2, monitored: false, regulator: 'auto', gas: 'i95', tempC: 5, peak: '1.5',
+    monthlyKgPerUnit: 20
+  };
 
-  function clone(o) { return JSON.parse(JSON.stringify(o)); }
-
-  var state = Object.assign({}, SAMPLE, clone(LPGCalc.DEFAULT_COEFFICIENTS), { confirmed: false });
+  var state = Object.assign({}, SAMPLE, { kgPerM3: LPGCalc.DEFAULT_KG_PER_M3, confirmed: false });
   try {
     var saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (saved && typeof saved === 'object') state = Object.assign(state, saved);
   } catch (e) { /* 保存領域が使えなくても動作する */ }
-
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* noop */ }
   }
 
   var $ = function (id) { return document.getElementById(id); };
-  var el = {
-    perUnit: $('perUnit'), units: $('units'), rate: $('rate'), rateRange: $('rateRange'),
-    spare: $('spare'), kgPerM3: $('kgPerM3'), confirmed: $('confirmed')
-  };
 
-  function num(v) {
-    if (v === '' || v === null || v === undefined) return NaN;
-    return Number(v);
-  }
+  function num(v) { return v === '' || v === null || v === undefined ? NaN : Number(v); }
   function fmt(x, d) {
     if (!isFinite(x)) return '–';
     return x.toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -493,57 +597,52 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     if (!isFinite(x)) return '–';
     return x.toLocaleString('ja-JP', { maximumFractionDigits: 3 });
   }
-  function escapeHtml(s) {
+  function fmtV(x) { return x === null || x === undefined ? '－' : x.toFixed(2); }
+  function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  function tempLabel(t) { return (t > 0 ? '' : t < 0 ? '−' : '') + Math.abs(t) + '℃'; }
 
-  function fillForm() {
-    el.perUnit.value = Number.isFinite(state.perUnitM3h) ? state.perUnitM3h : '';
-    el.units.value = Number.isFinite(state.units) ? state.units : '';
-    el.rate.value = Number.isFinite(state.simultaneityPct) ? state.simultaneityPct : '';
-    el.rateRange.value = Number.isFinite(state.simultaneityPct) ? state.simultaneityPct : 50;
-    el.spare.checked = !!state.spare;
-    el.kgPerM3.value = Number.isFinite(state.kgPerM3) ? state.kgPerM3 : '';
-    el.confirmed.checked = !!state.confirmed;
-    renderCoefRows();
+  $('gas').innerHTML = LPGCalc.GASES.map(function (g) { return '<option value="' + g.id + '">' + g.name + '</option>'; }).join('');
+  $('temp').innerHTML = LPGCalc.TEMPS.map(function (t) { return '<option value="' + t + '">' + tempLabel(t) + '</option>'; }).join('');
+  $('peak').innerHTML = LPGCalc.PEAKS.map(function (p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('');
+
+  function setRadio(name, value) {
+    var els = document.querySelectorAll('input[name="' + name + '"]');
+    for (var i = 0; i < els.length; i++) els[i].checked = els[i].value === String(value);
   }
 
-  function renderCoefRows() {
-    $('coef-rows').innerHTML = state.cylinders.map(function (c, i) {
-      return '<tr data-i="' + i + '">' +
-        '<td><input type="checkbox" id="cyl-en-' + c.id + '" data-f="enabled"' + (c.enabled ? ' checked' : '') + ' aria-label="' + escapeHtml(c.name) + 'を計算対象にする"></td>' +
-        '<td><input type="text" class="w-name" id="cyl-name-' + c.id + '" data-f="name" value="' + escapeHtml(c.name) + '" aria-label="名称"></td>' +
-        '<td><input type="number" class="w-num" id="cyl-cap-' + c.id + '" data-f="capacityKg" step="1" min="0" value="' + (Number.isFinite(c.capacityKg) ? c.capacityKg : '') + '" aria-label="充てん量"></td>' +
-        '<td><input type="number" class="w-num" id="cyl-gen-' + c.id + '" data-f="generationKgh" step="0.01" min="0" value="' + (Number.isFinite(c.generationKgh) ? c.generationKgh : '') + '" aria-label="ガス発生能力"' +
-          '></td>' +
-        '<td><button type="button" data-del="' + i + '" aria-label="' + escapeHtml(c.name) + 'を削除">削除</button></td>' +
-        '</tr>';
-    }).join('');
+  function fillForm() {
+    setRadio('usage', state.usage);
+    setRadio('inputUnit', state.inputUnit);
+    setRadio('series', state.series);
+    setRadio('regulator', state.regulator);
+    $('perUnit').value = Number.isFinite(state.perUnit) ? state.perUnit : '';
+    $('units').value = Number.isFinite(state.units) ? state.units : '';
+    $('rate').value = Number.isFinite(state.simultaneityPct) ? state.simultaneityPct : '';
+    $('rateRange').value = Number.isFinite(state.simultaneityPct) ? state.simultaneityPct : 50;
+    $('monitored').checked = !!state.monitored;
+    $('gas').value = state.gas;
+    $('temp').value = String(state.tempC);
+    $('peak').value = state.peak;
+    $('monthly').value = Number.isFinite(state.monthlyKgPerUnit) ? state.monthlyKgPerUnit : '';
+    $('kgPerM3').value = Number.isFinite(state.kgPerM3) ? state.kgPerM3 : '';
+    $('confirmed').checked = !!state.confirmed;
   }
 
   function showErrors(errors) {
-    ['perUnitM3h', 'units', 'simultaneityPct', 'kgPerM3', 'cylinders'].forEach(function (k) {
+    ['perUnit', 'units', 'simultaneityPct', 'kgPerM3', 'monthlyKgPerUnit'].forEach(function (k) {
       var box = $('err-' + k);
       box.hidden = !errors[k];
       box.textContent = errors[k] || '';
     });
-    el.perUnit.setAttribute('aria-invalid', !!errors.perUnitM3h);
-    el.units.setAttribute('aria-invalid', !!errors.units);
-    el.rate.setAttribute('aria-invalid', !!errors.simultaneityPct);
-    el.kgPerM3.setAttribute('aria-invalid', !!errors.kgPerM3);
-    state.cylinders.forEach(function (c) {
-      var inp = $('cyl-gen-' + c.id);
-      if (inp) inp.setAttribute('aria-invalid', !!errors['gen_' + c.id]);
-    });
-    var genErrs = Object.keys(errors).filter(function (k) { return k.indexOf('gen_') === 0; })
-      .map(function (k) { return errors[k]; });
-    if (genErrs.length) {
-      var box = $('err-cylinders');
-      box.hidden = false;
-      box.textContent = [errors.cylinders].concat(genErrs).filter(Boolean).join(' ');
-    }
+    $('perUnit').setAttribute('aria-invalid', !!errors.perUnit);
+    $('units').setAttribute('aria-invalid', !!errors.units);
+    $('rate').setAttribute('aria-invalid', !!errors.simultaneityPct);
+    $('kgPerM3').setAttribute('aria-invalid', !!errors.kgPerM3);
+    $('monthly').setAttribute('aria-invalid', !!errors.monthlyKgPerUnit);
   }
 
   function bottles(n, cls) {
@@ -553,105 +652,173 @@ tr.is-reco td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     return '<div class="bottles">' + html + '</div>';
   }
 
+  function renderControls() {
+    var type = LPGCalc.classify({
+      usage: state.usage, units: Number.isInteger(state.units) && state.units >= 1 ? state.units : 1,
+      series: state.series, monitored: state.monitored
+    });
+    var isGroup = type.id === 'small' || type.id === 'medium';
+    $('type-name').textContent = type.name;
+    var desc = {
+      individual: '1件のみのため戸別供給方式で算定します。',
+      small: '集団供給方式は自動切替式調整器を使用します。',
+      medium: '2系列供給方式・自動切替式調整器で算定します。',
+      business: '容器は原則として50kg容器とします。'
+    }[type.id];
+    $('type-desc').textContent = desc;
+    $('series-field').hidden = !type.seriesSelectable;
+    $('monitored-field').hidden = !isGroup;
+    $('reg-single').disabled = isGroup;
+    $('reg-hint').textContent = isGroup
+      ? '集団供給方式では自動切替式調整器を使用します。予備側を考慮して設置本数を2倍にします。'
+      : '自動切替式は予備側を考慮して設置本数を2倍にします。単段は予備側なしで算定します。';
+    if (isGroup) setRadio('regulator', 'auto'); else setRadio('regulator', state.regulator);
+    $('units-label').textContent = state.usage === 'business' ? '件数（店舗・設備の数）' : '建物全体の件数';
+    $('perUnit-unit').textContent = state.inputUnit === 'kw' ? 'kW' : 'm³/h';
+    $('perUnit').step = state.inputUnit === 'kw' ? '0.1' : '0.01';
+
+    var needFactor = state.inputUnit === 'm3h';
+    $('coef-notice').hidden = !needFactor || !!state.confirmed;
+    var pill = $('coef-pill');
+    pill.className = 'pill ' + (state.confirmed ? 'ok' : 'warn');
+    pill.textContent = state.confirmed ? '確認済み' : '暫定値';
+  }
+
+  function renderGenTable(r) {
+    var reg = r ? r.regulator : state.regulator;
+    var best = r && r.options.filter(function (o) { return o.id === r.recommendedId; })[0];
+    var size = best ? best.sizeKg : 50;
+    var gasName = LPGCalc.GASES.filter(function (g) { return g.id === state.gas; })[0].name;
+    $('gen-meta').textContent = size + 'kg容器・' + (reg === 'auto' ? '自動切替式調整器' : '単段調整器') + '・' + gasName + '。選んだ条件の値を強調しています。';
+    $('gen-head').innerHTML = '<tr><th>ピーク時間</th>' + LPGCalc.TEMPS.map(function (t) { return '<th>' + tempLabel(t) + '</th>'; }).join('') + '</tr>';
+    $('gen-body').innerHTML = LPGCalc.PEAKS.map(function (p) {
+      return '<tr><td>' + esc(p.name) + '</td>' + LPGCalc.TEMPS.map(function (t) {
+        var v = LPGCalc.lookupGeneration(reg, size, state.gas, t, p.id).value;
+        var sel = p.id === state.peak && t === state.tempC;
+        return '<td class="num' + (sel ? ' sel' : '') + (v === null ? ' na' : '') + '">' + fmtV(v) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+  }
+
   function render() {
+    renderControls();
     var r = LPGCalc.calculate(state);
     showErrors(r.ok ? {} : r.errors);
-
-    var confirmed = !!state.confirmed;
-    $('coef-notice').hidden = confirmed;
-    var pill = $('coef-pill');
-    pill.className = 'pill ' + (confirmed ? 'ok' : 'warn');
-    pill.textContent = confirmed ? '確認済み' : '暫定値';
+    renderGenTable(r.ok ? r : null);
 
     if (!r.ok) {
-      ['o-total', 'o-peak', 'o-kg'].forEach(function (id) { $(id).textContent = '–'; });
-      ['f-total', 'f-peak', 'f-kg'].forEach(function (id) { $(id).textContent = ''; });
+      ['o-total', 'o-peak', 'o-design'].forEach(function (id) { $(id).textContent = '–'; });
+      ['f-total', 'f-peak', 'f-design', 'o-total-u', 'o-peak-u'].forEach(function (id) { $(id).textContent = ''; });
+      $('alerts').innerHTML = '';
       $('reco-title').textContent = '入力を確認してください';
       $('reco-sub').textContent = '';
+      $('reco-facts').innerHTML = '';
       $('rack').innerHTML = '';
       $('rows').innerHTML = '';
       return;
     }
 
-    $('o-total').textContent = fmt(r.totalM3h, 2);
-    $('o-peak').textContent = fmt(r.peakM3h, 2);
-    $('o-kg').textContent = fmt(r.peakKgh, 2);
-    $('f-total').textContent = fmtAuto(state.perUnitM3h) + ' m³/h × ' + state.units + ' 件';
-    $('f-peak').textContent = fmt(r.totalM3h, 2) + ' × ' + fmtAuto(state.simultaneityPct) + ' %';
-    $('f-kg').textContent = fmt(r.peakM3h, 2) + ' × ' + fmtAuto(state.kgPerM3) + ' kg/m³';
+    var u = state.inputUnit === 'kw' ? 'kW' : 'm³/h';
+    $('o-total').textContent = fmt(r.totalInput, 2);
+    $('o-total-u').textContent = u;
+    $('f-total').textContent = fmtAuto(state.perUnit) + ' ' + u + ' × ' + state.units + ' 件';
+    if (state.inputUnit === 'kw') {
+      $('o-peak').textContent = fmt(r.peakKW, 1);
+      $('o-peak-u').textContent = 'kW';
+      $('f-peak').textContent = '× ' + fmtAuto(state.simultaneityPct) + ' % ＝ ' + fmt(r.peakKgh, 2) + ' kg/h';
+    } else {
+      $('o-peak').textContent = fmt(r.peakInput, 2);
+      $('o-peak-u').textContent = 'm³/h';
+      $('f-peak').textContent = '× ' + fmtAuto(state.simultaneityPct) + ' % ＝ ' + fmt(r.peakKgh, 2) + ' kg/h ＝ ' + fmt(r.peakKW, 1) + ' kW';
+    }
+    var t = r.supplyType;
+    var factors = [];
+    if (t.series === 2) factors.push('0.7');
+    if (t.safety !== 1) factors.push(String(t.safety));
+    $('o-design').textContent = fmt(r.designKgh, 2);
+    $('f-design').textContent = (factors.length ? fmt(r.peakKW, 1) + ' kW × ' + factors.join(' × ') : fmt(r.peakKW, 1) + ' kW') + ' ÷ 14';
+
+    $('alerts').innerHTML = r.warnings.map(function (w) { return '<div class="alert warn">' + esc(w) + '</div>'; }).join('') +
+      r.notes.map(function (n) { return '<div class="alert info">' + esc(n) + '</div>'; }).join('');
 
     var best = r.options.filter(function (o) { return o.id === r.recommendedId; })[0];
-    $('reco-title').innerHTML = escapeHtml(best.name) + ' × <em>' + best.total + '</em> 本';
-    $('reco-sub').textContent = r.spare
-      ? '使用側 ' + best.perSide + ' 本 ＋ 予備側 ' + best.perSide + ' 本。使用側の供給能力 ' + fmt(best.supplyKgh, 2) + ' kg/h ≥ 必要量 ' + fmt(r.peakKgh, 2) + ' kg/h'
-      : '使用側 ' + best.perSide + ' 本。供給能力 ' + fmt(best.supplyKgh, 2) + ' kg/h ≥ 必要量 ' + fmt(r.peakKgh, 2) + ' kg/h';
-    $('rack').innerHTML =
-      '<div class="rack-row"><span class="tag">使用側</span>' + bottles(best.perSide, 'use') + '</div>' +
-      (r.spare ? '<div class="rack-row"><span class="tag">予備側</span>' + bottles(best.perSide, '') + '</div>' : '');
+    if (best) {
+      $('reco-title').innerHTML = esc(best.name) + ' × <em>' + best.total + '</em> 本';
+      $('reco-sub').textContent = (r.spare
+        ? '使用側 ' + best.perSide + ' 本 ＋ 予備側 ' + best.perSide + ' 本（' + t.name + '・自動切替式）'
+        : '使用側 ' + best.perSide + ' 本（' + t.name + '・単段調整器）');
+      var facts = [
+        '計算値 <b>' + fmt(best.nCalc, 2) + '</b> 本',
+        'ガス発生能力 <b>' + best.generationKgh.toFixed(2) + '</b> kg/h・本（' + esc(best.source) + '）'
+      ];
+      if (r.regulatorCapacityKgh !== null) facts.push('自動切替式調整器の能力 <b>' + fmt(r.regulatorCapacityKgh, 1) + '</b> kg/h 以上');
+      if (best.exchange) facts.push('容器交換 <b>' + esc(best.exchange.label) + '</b>');
+      $('reco-facts').innerHTML = facts.map(function (f) { return '<span>' + f + '</span>'; }).join('');
+      $('rack').innerHTML =
+        '<div class="rack-row"><span class="tag">使用側</span>' + bottles(best.perSide, 'use') + '</div>' +
+        (r.spare ? '<div class="rack-row"><span class="tag">予備側</span>' + bottles(best.perSide, '') + '</div>' : '');
+    } else {
+      $('reco-title').textContent = '該当するデータがありません';
+      $('reco-sub').textContent = '調整器・供給ガス・気温・ピーク時間の組み合わせを見直してください。';
+      $('reco-facts').innerHTML = '';
+      $('rack').innerHTML = '';
+    }
 
     $('rows').innerHTML = r.options.map(function (o) {
+      if (!o.available) {
+        return '<tr><td>' + esc(o.name) + '</td><td class="num na">－<span class="src">' + esc(o.source) + '</span></td>' +
+          '<td class="na" colspan="6">この条件のデータなし</td></tr>';
+      }
       var isBest = o.id === r.recommendedId;
       return '<tr class="' + (isBest ? 'is-reco' : '') + '">' +
-        '<td>' + escapeHtml(o.name) + (isBest ? '<span class="pill reco-pill">推奨</span>' : '') + '</td>' +
-        '<td class="num">' + fmtAuto(o.generationKgh) + '</td>' +
+        '<td>' + esc(o.name) + (isBest ? '<span class="pill reco-pill">推奨</span>' : '') + '</td>' +
+        '<td class="num">' + o.generationKgh.toFixed(2) + '<span class="src">' + esc(o.source) + '</span></td>' +
+        '<td class="num">' + fmt(o.nCalc, 2) + '</td>' +
         '<td class="num">' + o.perSide + '</td>' +
         '<td class="num big">' + o.total + '</td>' +
         '<td class="num">' + fmt(o.supplyKgh, 2) + '</td>' +
-        '<td class="num">' + fmt(o.marginPct, 1) + '</td>' +
-        '<td class="num">' + (o.storedKg === null ? '–' : fmtAuto(o.storedKg)) + '</td>' +
+        '<td class="num">' + fmtAuto(o.storedKg) + '</td>' +
+        '<td>' + (o.exchange ? esc(o.exchange.label) : '–') + '</td>' +
         '</tr>';
     }).join('');
   }
 
   function update() { save(); render(); }
 
-  el.perUnit.addEventListener('input', function () { state.perUnitM3h = num(el.perUnit.value); update(); });
-  el.units.addEventListener('input', function () { state.units = num(el.units.value); update(); });
-  el.rate.addEventListener('input', function () {
-    state.simultaneityPct = num(el.rate.value);
-    if (isFinite(state.simultaneityPct)) el.rateRange.value = state.simultaneityPct;
-    update();
-  });
-  el.rateRange.addEventListener('input', function () {
-    state.simultaneityPct = num(el.rateRange.value);
-    el.rate.value = el.rateRange.value;
-    update();
-  });
-  el.spare.addEventListener('change', function () { state.spare = el.spare.checked; update(); });
-  el.kgPerM3.addEventListener('input', function () { state.kgPerM3 = num(el.kgPerM3.value); update(); });
-  el.confirmed.addEventListener('change', function () { state.confirmed = el.confirmed.checked; update(); });
-  $('form').addEventListener('submit', function (e) { e.preventDefault(); });
+  function onRadio(name, key, parse) {
+    var els = document.querySelectorAll('input[name="' + name + '"]');
+    for (var i = 0; i < els.length; i++) {
+      els[i].addEventListener('change', function (e) { state[key] = parse ? parse(e.target.value) : e.target.value; update(); });
+    }
+  }
+  onRadio('usage', 'usage');
+  onRadio('inputUnit', 'inputUnit');
+  onRadio('series', 'series', Number);
+  onRadio('regulator', 'regulator');
 
-  $('coef-rows').addEventListener('input', function (e) {
-    var tr = e.target.closest('tr');
-    var f = e.target.getAttribute('data-f');
-    if (!tr || !f) return;
-    var c = state.cylinders[Number(tr.getAttribute('data-i'))];
-    if (f === 'enabled') c.enabled = e.target.checked;
-    else if (f === 'name') c.name = e.target.value;
-    else c[f] = num(e.target.value);
+  $('perUnit').addEventListener('input', function (e) { state.perUnit = num(e.target.value); update(); });
+  $('units').addEventListener('input', function (e) { state.units = num(e.target.value); update(); });
+  $('rate').addEventListener('input', function (e) {
+    state.simultaneityPct = num(e.target.value);
+    if (isFinite(state.simultaneityPct)) $('rateRange').value = state.simultaneityPct;
     update();
   });
-  $('coef-rows').addEventListener('click', function (e) {
-    var i = e.target.getAttribute('data-del');
-    if (i === null) return;
-    state.cylinders.splice(Number(i), 1);
-    renderCoefRows();
+  $('rateRange').addEventListener('input', function (e) {
+    state.simultaneityPct = num(e.target.value);
+    $('rate').value = e.target.value;
     update();
   });
-  $('add-cyl').addEventListener('click', function () {
-    state.cylinders.push({ id: 'u' + Date.now(), name: '追加容器', capacityKg: NaN, generationKgh: NaN, enabled: true });
-    renderCoefRows();
+  $('monitored').addEventListener('change', function (e) { state.monitored = e.target.checked; update(); });
+  $('gas').addEventListener('change', function (e) { state.gas = e.target.value; update(); });
+  $('temp').addEventListener('change', function (e) { state.tempC = Number(e.target.value); update(); });
+  $('peak').addEventListener('change', function (e) { state.peak = e.target.value; update(); });
+  $('monthly').addEventListener('input', function (e) {
+    state.monthlyKgPerUnit = e.target.value === '' ? null : num(e.target.value);
     update();
   });
-  $('reset-coef').addEventListener('click', function () {
-    var d = clone(LPGCalc.DEFAULT_COEFFICIENTS);
-    state.kgPerM3 = d.kgPerM3;
-    state.cylinders = d.cylinders;
-    state.confirmed = false;
-    fillForm();
-    update();
-  });
+  $('kgPerM3').addEventListener('input', function (e) { state.kgPerM3 = num(e.target.value); update(); });
+  $('confirmed').addEventListener('change', function (e) { state.confirmed = e.target.checked; update(); });
+  $('form').addEventListener('submit', function (e) { e.preventDefault(); });
   $('reset').addEventListener('click', function () {
     Object.assign(state, SAMPLE);
     fillForm();
