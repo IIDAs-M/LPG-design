@@ -175,12 +175,13 @@
     if (!(typeof p === 'number' && isFinite(p) && p > 0 && p <= 100)) {
       errors.simultaneityPct = '同時使用率は0より大きく100以下の数値を入力してください。';
     }
-    if (input.inputUnit === 'm3h' && !isPositive(input.kgPerM3)) {
+    var m = input.monthlyPerUnit;
+    var hasMonthly = m !== null && m !== undefined;
+    if ((input.inputUnit === 'm3h' || (hasMonthly && input.monthlyUnit !== 'kg')) && !isPositive(input.kgPerM3)) {
       errors.kgPerM3 = '換算係数は0より大きい数値を入力してください。';
     }
-    if (input.monthlyKgPerUnit !== null && input.monthlyKgPerUnit !== undefined &&
-        !(typeof input.monthlyKgPerUnit === 'number' && isFinite(input.monthlyKgPerUnit) && input.monthlyKgPerUnit >= 0)) {
-      errors.monthlyKgPerUnit = '1か月のガス消費量は0以上の数値を入力するか、空欄にしてください。';
+    if (hasMonthly && !(typeof m === 'number' && isFinite(m) && m >= 0)) {
+      errors.monthlyPerUnit = '1か月のガス消費量は0以上の数値を入力するか、空欄にしてください。';
     }
     return errors;
   }
@@ -212,7 +213,11 @@
     var designKW = peakKW * (type.series === 2 ? 0.7 : 1.0) * type.safety;
     var designKgh = designKW / KW_PER_KGH;
     var factor = regulator === 'auto' ? 2 : 1;
-    var monthlyTotalKg = isPositive(input.monthlyKgPerUnit) ? input.monthlyKgPerUnit * input.units : null;
+    // 1か月の消費量は m³/月（既定）または kg/月。m³ は時間あたりと同じ換算（1m³ ＝ 2kg 既定）で kg にする。
+    var monthlyKgPerUnit = isPositive(input.monthlyPerUnit)
+      ? input.monthlyPerUnit * (input.monthlyUnit === 'kg' ? 1 : input.kgPerM3)
+      : null;
+    var monthlyTotalKg = monthlyKgPerUnit === null ? null : monthlyKgPerUnit * input.units;
 
     var options = SIZES.map(function (size) {
       var g = lookupGeneration(regulator, size, input.gas, input.tempC, input.peak);
@@ -284,6 +289,7 @@
       designKgh: designKgh,
       // 自動切替式調整器能力 = 最大ガス消費量 × 1.0 / 14（設計例による）
       regulatorCapacityKgh: regulator === 'auto' ? peakKW / KW_PER_KGH : null,
+      monthlyKgPerUnit: monthlyKgPerUnit,
       monthlyTotalKg: monthlyTotalKg,
       options: options,
       recommendedId: recommended ? recommended.id : null,

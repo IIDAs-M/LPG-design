@@ -296,7 +296,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seg input:checked + span { background: var(--surface); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 700; }
 .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
 .seg input:disabled + span { opacity: .45; cursor: not-allowed; }
-.seg.small span { padding: 5px 10px; font: 500 12.5px/1.2 var(--mono); }
+.seg.small span { padding: 5px 10px; font: 500 12.5px/1.2 var(--mono); white-space: nowrap; }
 .label-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .divider { border: 0; border-top: 1px solid var(--line); margin: 0; }
 .type-chip {
@@ -452,13 +452,19 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
       </div>
 
       <div class="field">
-        <label for="monthly">1件あたり1か月のガス消費量（任意）</label>
-        <div class="input-unit">
-          <input id="monthly" type="number" inputmode="decimal" step="1" min="0" placeholder="例 20">
-          <span class="unit">kg/月</span>
+        <div class="label-row">
+          <label for="monthly">1件あたり1か月のガス消費量（任意）</label>
+          <div class="seg small" role="radiogroup" aria-label="1か月のガス消費量の単位">
+            <label><input type="radio" name="monthlyUnit" id="munit-m3" value="m3"><span>m³/月</span></label>
+            <label><input type="radio" name="monthlyUnit" id="munit-kg" value="kg"><span>kg/月</span></label>
+          </div>
         </div>
-        <div class="hint">入力すると容器交換周期の目安を表示します。</div>
-        <div class="err" id="err-monthlyKgPerUnit" hidden></div>
+        <div class="input-unit">
+          <input id="monthly" type="number" inputmode="decimal" step="0.1" min="0">
+          <span class="unit" id="monthly-unit">m³/月</span>
+        </div>
+        <div class="hint">入力すると容器交換周期の目安を表示します。<span id="monthly-hint"></span></div>
+        <div class="err" id="err-monthlyPerUnit" hidden></div>
       </div>
 
       <button type="button" id="reset">入力例に戻す</button>
@@ -543,7 +549,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
         <input id="kgPerM3" type="number" inputmode="decimal" step="0.001" min="0">
         <span class="unit">kg/h</span>
       </div>
-      <div class="hint">既定値は 1m³/h ＝ 2kg/h。必要に応じて変更できます。m³/h で入力したときだけ使います。</div>
+      <div class="hint">既定値は 1m³/h ＝ 2kg/h。必要に応じて変更できます。m³/h または m³/月 で入力したときに使います。</div>
       <div class="err" id="err-kgPerM3" hidden></div>
     </div>
     <div class="coef-actions"><button type="button" id="reset-kg">既定値（2kg/h）に戻す</button></div>
@@ -570,11 +576,11 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
 <script>
 (function () {
   'use strict';
-  var STORE_KEY = 'lpg-design-v2';
+  var STORE_KEY = 'lpg-design-v3';
   var SAMPLE = {
     usage: 'residential', inputUnit: 'm3h', perUnit: 1.2, units: 6, simultaneityPct: 50,
     series: 2, monitored: false, regulator: 'auto', gas: 'i95', tempC: 5, peak: '1.5',
-    monthlyKgPerUnit: 20
+    monthlyPerUnit: 10, monthlyUnit: 'm3'
   };
 
   var state = Object.assign({}, SAMPLE, { kgPerM3: LPGCalc.DEFAULT_KG_PER_M3 });
@@ -627,12 +633,13 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('gas').value = state.gas;
     $('temp').value = String(state.tempC);
     $('peak').value = state.peak;
-    $('monthly').value = Number.isFinite(state.monthlyKgPerUnit) ? state.monthlyKgPerUnit : '';
+    setRadio('monthlyUnit', state.monthlyUnit);
+    $('monthly').value = Number.isFinite(state.monthlyPerUnit) ? state.monthlyPerUnit : '';
     $('kgPerM3').value = Number.isFinite(state.kgPerM3) ? state.kgPerM3 : '';
   }
 
   function showErrors(errors) {
-    ['perUnit', 'units', 'simultaneityPct', 'kgPerM3', 'monthlyKgPerUnit'].forEach(function (k) {
+    ['perUnit', 'units', 'simultaneityPct', 'kgPerM3', 'monthlyPerUnit'].forEach(function (k) {
       var box = $('err-' + k);
       box.hidden = !errors[k];
       box.textContent = errors[k] || '';
@@ -641,7 +648,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('units').setAttribute('aria-invalid', !!errors.units);
     $('rate').setAttribute('aria-invalid', !!errors.simultaneityPct);
     $('kgPerM3').setAttribute('aria-invalid', !!errors.kgPerM3);
-    $('monthly').setAttribute('aria-invalid', !!errors.monthlyKgPerUnit);
+    $('monthly').setAttribute('aria-invalid', !!errors.monthlyPerUnit);
   }
 
   function bottles(n, cls) {
@@ -675,6 +682,12 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('units-label').textContent = state.usage === 'business' ? '件数（店舗・設備の数）' : '建物全体の件数';
     $('perUnit-unit').textContent = state.inputUnit === 'kw' ? 'kW' : 'm³/h';
     $('perUnit').step = state.inputUnit === 'kw' ? '0.1' : '0.01';
+    var mKg = state.monthlyUnit === 'kg';
+    $('monthly-unit').textContent = mKg ? 'kg/月' : 'm³/月';
+    $('monthly').placeholder = mKg ? '例 20' : '例 10';
+    $('monthly-hint').textContent = !mKg && Number.isFinite(state.monthlyPerUnit) && state.monthlyPerUnit > 0 && Number.isFinite(state.kgPerM3)
+      ? ' ' + fmtAuto(state.monthlyPerUnit) + ' m³/月 ＝ ' + fmtAuto(state.monthlyPerUnit * state.kgPerM3) + ' kg/月（1m³ ＝ ' + fmtAuto(state.kgPerM3) + 'kg）で計算します。'
+      : '';
 
     var isDefault = state.kgPerM3 === LPGCalc.DEFAULT_KG_PER_M3;
     var pill = $('coef-pill');
@@ -796,6 +809,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
   onRadio('inputUnit', 'inputUnit');
   onRadio('series', 'series', Number);
   onRadio('regulator', 'regulator');
+  onRadio('monthlyUnit', 'monthlyUnit');
 
   $('perUnit').addEventListener('input', function (e) { state.perUnit = num(e.target.value); update(); });
   $('units').addEventListener('input', function (e) { state.units = num(e.target.value); update(); });
@@ -814,7 +828,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
   $('temp').addEventListener('change', function (e) { state.tempC = Number(e.target.value); update(); });
   $('peak').addEventListener('change', function (e) { state.peak = e.target.value; update(); });
   $('monthly').addEventListener('input', function (e) {
-    state.monthlyKgPerUnit = e.target.value === '' ? null : num(e.target.value);
+    state.monthlyPerUnit = e.target.value === '' ? null : num(e.target.value);
     update();
   });
   $('kgPerM3').addEventListener('input', function (e) { state.kgPerM3 = num(e.target.value); update(); });

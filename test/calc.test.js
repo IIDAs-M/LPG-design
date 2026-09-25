@@ -16,14 +16,15 @@ function input(overrides) {
     peak: '1',
     series: 2,
     monitored: false,
-    monthlyKgPerUnit: null
+    monthlyPerUnit: null,
+    monthlyUnit: 'm3'
   }, overrides);
 }
 const opt = (r, size) => r.options.find(o => o.sizeKg === size);
 
 // 参考資料 4.2.1 戸別供給方式の算定例: 59.7kW、50kg、5℃、い号PP95、1時間 → 0.78 → 1本、2系列で2本
 test('算定例: 戸別供給方式', () => {
-  const r = calculate(input({ perUnit: 59.7, monthlyKgPerUnit: 20 }));
+  const r = calculate(input({ perUnit: 59.7, monthlyPerUnit: 20, monthlyUnit: 'kg' }));
   assert.equal(r.supplyType.id, 'individual');
   const c = opt(r, 50);
   assert.equal(c.generationKgh, 5.50);
@@ -35,7 +36,7 @@ test('算定例: 戸別供給方式', () => {
 
 // 4.2.2 小規模集団: 109.0kW、6戸、1.5時間 → 3.90kg/h、1.53 → 2本、4本設置、交換 月2回
 test('算定例: 小規模集団供給方式', () => {
-  const r = calculate(input({ perUnit: 109.0 / 6, units: 6, peak: '1.5', monthlyKgPerUnit: 20 }));
+  const r = calculate(input({ perUnit: 109.0 / 6, units: 6, peak: '1.5', monthlyPerUnit: 20, monthlyUnit: 'kg' }));
   assert.equal(r.supplyType.id, 'small');
   const c = opt(r, 50);
   assert.equal(c.generationKgh, 3.90);
@@ -47,7 +48,7 @@ test('算定例: 小規模集団供給方式', () => {
 
 // 中規模集団: 377.5kW、60戸、連続使用 → 2.50kg/h、8.3 → 9本、18本設置、交換 月3回
 test('算定例: 中規模集団供給方式', () => {
-  const r = calculate(input({ perUnit: 377.5 / 60, units: 60, peak: 'cont', monthlyKgPerUnit: 20 }));
+  const r = calculate(input({ perUnit: 377.5 / 60, units: 60, peak: 'cont', monthlyPerUnit: 20, monthlyUnit: 'kg' }));
   assert.equal(r.supplyType.id, 'medium');
   const c = opt(r, 50);
   assert.equal(c.generationKgh, 2.50);
@@ -139,4 +140,16 @@ test('既定の換算は 1m³/h ＝ 2kg/h、変更すると結果に反映され
   const r = calculate(input({ inputUnit: 'm3h', perUnit: 1, units: 1, kgPerM3: 2.5 }));
   assert.equal(r.peakKgh, 2.5);
   assert.equal(r.peakKW, 35);
+});
+
+test('1か月の消費量は m³/月 を既定とし、kg/月 も選べる', () => {
+  const base = { perUnit: 377.5 / 60, units: 60, peak: 'cont' };
+  const m3 = calculate(input(Object.assign({ monthlyPerUnit: 10 }, base)));
+  const kg = calculate(input(Object.assign({ monthlyPerUnit: 20, monthlyUnit: 'kg' }, base)));
+  assert.equal(m3.monthlyKgPerUnit, 20);
+  assert.equal(m3.monthlyTotalKg, 1200);
+  assert.equal(opt(m3, 50).exchange.label, '月3回');
+  assert.equal(opt(kg, 50).exchange.label, '月3回');
+  const m3b = calculate(input(Object.assign({ monthlyPerUnit: 10, kgPerM3: 2.5 }, base)));
+  assert.equal(m3b.monthlyKgPerUnit, 25);
 });
