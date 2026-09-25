@@ -132,3 +132,11 @@ test('入力エラー', () => {
   assert.equal(r.ok, false);
   assert.ok(r.errors.units && r.errors.simultaneityPct && r.errors.perUnit);
 });
+
+test('既定の換算は 1m³/h ＝ 2kg/h、変更すると結果に反映される', () => {
+  const { DEFAULT_KG_PER_M3 } = require('../calc.js');
+  assert.equal(DEFAULT_KG_PER_M3, 2);
+  const r = calculate(input({ inputUnit: 'm3h', perUnit: 1, units: 1, kgPerM3: 2.5 }));
+  assert.equal(r.peakKgh, 2.5);
+  assert.equal(r.peakKW, 35);
+});

@@ -352,10 +352,6 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     <p class="lead">1件あたりのガス消費量・件数・同時使用率から1時間あたりの必要ガス量を算出し、標準のガス発生能力表をもとに容器の大きさと設置本数を求めます。</p>
   </header>
 
-  <div id="coef-notice" class="notice" hidden>
-    <strong>m³/h から kg/h への換算係数は暫定値です</strong>
-    <span>参考資料には気体の体積（m³）と質量（kg）の換算係数が記載されていないため、仮に 2.0 kg/m³ としています。下の「係数設定」で正しい値に置き換え、確認済みにチェックしてください。kW で入力する場合はこの係数を使いません。</span>
-  </div>
 
   <div class="layout">
     <form id="form" class="panel" novalidate>
@@ -381,7 +377,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
           <input id="perUnit" type="number" inputmode="decimal" step="0.01" min="0">
           <span class="unit" id="perUnit-unit">m³/h</span>
         </div>
-        <div class="hint">その住戸・店舗の燃焼器具の最大ガス消費量の合計。</div>
+        <div class="hint">その住戸・店舗の燃焼器具の最大ガス消費量の合計。<span id="conv-hint"></span></div>
         <div class="err" id="err-perUnit" hidden></div>
       </div>
 
@@ -539,28 +535,25 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
   <section class="panel" id="coef">
     <div class="section-head">
       <h2>係数設定</h2>
-      <span class="pill warn" id="coef-pill">暫定値</span>
+      <span class="pill ok" id="coef-pill">既定値</span>
     </div>
     <div class="field" style="max-width: 360px;">
-      <label for="kgPerM3">換算係数（気体1m³あたりの質量）</label>
+      <label for="kgPerM3">LPガスの換算（1m³/h あたりの kg/h）</label>
       <div class="input-unit">
         <input id="kgPerM3" type="number" inputmode="decimal" step="0.001" min="0">
-        <span class="unit">kg/m³</span>
+        <span class="unit">kg/h</span>
       </div>
-      <div class="hint">m³/h で入力したときだけ使います。暫定値 2.0（1kg ≒ 0.5m³）。</div>
+      <div class="hint">既定値は 1m³/h ＝ 2kg/h。必要に応じて変更できます。m³/h で入力したときだけ使います。</div>
       <div class="err" id="err-kgPerM3" hidden></div>
     </div>
-    <label class="check" for="confirmed">
-      <input id="confirmed" type="checkbox">
-      <span>換算係数を確認しました</span>
-    </label>
+    <div class="coef-actions"><button type="button" id="reset-kg">既定値（2kg/h）に戻す</button></div>
     <div class="gen-meta">kW と kg/h の換算は参考資料の算定式どおり 1kg/h = 14kW で固定しています。</div>
   </section>
 
   <section class="panel formula">
     <h2 style="color: var(--ink);">計算方法（参考資料 4.2 容器本数の決定）</h2>
     <ol>
-      <li>必要ガス量 <code>Q [kW] = 1件あたりの消費量 × 件数 × 同時使用率</code>（m³/h 入力は <code>× 換算係数 × 14</code> で kW に換算）</li>
+      <li>必要ガス量 <code>Q [kW] = 1件あたりの消費量 × 件数 × 同時使用率</code>（m³/h 入力は <code>× 2 [kg/h per m³/h] × 14</code> で kW に換算。換算値は変更可）</li>
       <li>戸別・業務用 <code>N = Q ÷ (V × 14)</code></li>
       <li>小規模集団（2〜10戸）1系列 <code>N = Q × 1.1 ÷ (V × 14)</code></li>
       <li>小・中規模集団（2〜69戸）2系列 <code>N = Q × 0.7 × 1.1 ÷ (V × 14)</code>（集中監視で残量管理する場合は 1.1 → 1.0）</li>
@@ -584,7 +577,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     monthlyKgPerUnit: 20
   };
 
-  var state = Object.assign({}, SAMPLE, { kgPerM3: LPGCalc.DEFAULT_KG_PER_M3, confirmed: false });
+  var state = Object.assign({}, SAMPLE, { kgPerM3: LPGCalc.DEFAULT_KG_PER_M3 });
   try {
     var saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (saved && typeof saved === 'object') state = Object.assign(state, saved);
@@ -636,7 +629,6 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('peak').value = state.peak;
     $('monthly').value = Number.isFinite(state.monthlyKgPerUnit) ? state.monthlyKgPerUnit : '';
     $('kgPerM3').value = Number.isFinite(state.kgPerM3) ? state.kgPerM3 : '';
-    $('confirmed').checked = !!state.confirmed;
   }
 
   function showErrors(errors) {
@@ -684,11 +676,13 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('perUnit-unit').textContent = state.inputUnit === 'kw' ? 'kW' : 'm³/h';
     $('perUnit').step = state.inputUnit === 'kw' ? '0.1' : '0.01';
 
-    var needFactor = state.inputUnit === 'm3h';
-    $('coef-notice').hidden = !needFactor || !!state.confirmed;
+    var isDefault = state.kgPerM3 === LPGCalc.DEFAULT_KG_PER_M3;
     var pill = $('coef-pill');
-    pill.className = 'pill ' + (state.confirmed ? 'ok' : 'warn');
-    pill.textContent = state.confirmed ? '確認済み' : '暫定値';
+    pill.className = 'pill ' + (isDefault ? 'ok' : 'warn');
+    pill.textContent = isDefault ? '既定値' : '変更中';
+    $('conv-hint').textContent = state.inputUnit === 'm3h'
+      ? ' 1m³/h ＝ ' + (Number.isFinite(state.kgPerM3) ? fmtAuto(state.kgPerM3) : '–') + 'kg/h で換算します' + (isDefault ? '。' : '（既定値から変更中）。')
+      : '';
   }
 
   function renderGenTable(r) {
@@ -824,7 +818,11 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     update();
   });
   $('kgPerM3').addEventListener('input', function (e) { state.kgPerM3 = num(e.target.value); update(); });
-  $('confirmed').addEventListener('change', function (e) { state.confirmed = e.target.checked; update(); });
+  $('reset-kg').addEventListener('click', function () {
+    state.kgPerM3 = LPGCalc.DEFAULT_KG_PER_M3;
+    $('kgPerM3').value = state.kgPerM3;
+    update();
+  });
   $('form').addEventListener('submit', function (e) { e.preventDefault(); });
   $('reset').addEventListener('click', function () {
     Object.assign(state, SAMPLE);

@@ -4,7 +4,7 @@
  * Google Fonts はキャッシュ優先。
  * ファイルを変更したら CACHE の版数を上げる。
  */
-var CACHE = 'lpg-design-v3';
+var CACHE = 'lpg-design-v4';
 var CORE = [
   './',
   'index.html',
