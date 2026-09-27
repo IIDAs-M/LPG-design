@@ -763,7 +763,7 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
         : '使用側 ' + best.perSide + ' 本（' + t.name + '・単段調整器）');
       var facts = [
         '計算値 <b>' + fmt(best.nCalc, 2) + '</b> 本',
-        'ガス発生能力 <b>' + best.generationKgh.toFixed(2) + '</b> kg/h・本（' + esc(best.source) + '）'
+        'ガス発生能力 <b>' + (best.substitute ? '※' : '') + best.generationKgh.toFixed(2) + '</b> kg/h・本（' + esc(best.source) + (best.substitute ? '・' + esc(best.basis) : '') + '）'
       ];
       if (r.regulatorCapacityKgh !== null) facts.push('自動切替式調整器の能力 <b>' + fmt(r.regulatorCapacityKgh, 1) + '</b> kg/h 以上');
       if (best.exchange) facts.push('容器交換 <b>' + esc(best.exchange.label) + '</b>');
@@ -781,12 +781,13 @@ td .src { display: block; font: 400 11px/1.3 var(--body); color: var(--muted); }
     $('rows').innerHTML = r.options.map(function (o) {
       if (!o.available) {
         return '<tr><td>' + esc(o.name) + '</td><td class="num na">－<span class="src">' + esc(o.source) + '</span></td>' +
-          '<td class="na" colspan="6">この条件のデータなし</td></tr>';
+          '<td class="na" colspan="6">参考資料に使える値がありません</td></tr>';
       }
       var isBest = o.id === r.recommendedId;
       return '<tr class="' + (isBest ? 'is-reco' : '') + '">' +
         '<td>' + esc(o.name) + (isBest ? '<span class="pill reco-pill">推奨</span>' : '') + '</td>' +
-        '<td class="num">' + o.generationKgh.toFixed(2) + '<span class="src">' + esc(o.source) + '</span></td>' +
+        '<td class="num">' + (o.substitute ? '※' : '') + o.generationKgh.toFixed(2) +
+          '<span class="src">' + esc(o.source) + (o.substitute ? '<br>' + esc(o.basis) : '') + '</span></td>' +
         '<td class="num">' + fmt(o.nCalc, 2) + '</td>' +
         '<td class="num">' + o.perSide + '</td>' +
         '<td class="num big">' + o.total + '</td>' +

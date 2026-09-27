@@ -111,9 +111,37 @@ test('表の参照', () => {
   assert.equal(lookupGeneration('auto', 20, 'i95', 5, '1').value, null);
 });
 
-test('データがない条件では推奨なしで警告', () => {
+test('表にない条件は安全側の値で代用し、推奨が代用値なら警告', () => {
+  // 自動切替式・ろ号PP60・−5℃ は表Ⅱ－4－1 にない → 単段(表Ⅱ－4－2)のろ号 −5℃ 1時間 0.50
   const r = calculate(input({ gas: 'ro60', tempC: -5 }));
+  const c = opt(r, 50);
+  assert.equal(c.substitute, true);
+  assert.equal(c.generationKgh, 0.50);
+  assert.equal(r.recommendedId, 'c50');
+  assert.ok(r.warnings.some(w => w.includes('代用値')));
+});
+
+test('推奨以外の容器にも数値が出る（自動切替式の20kg・10kg）', () => {
+  const r = calculate(input({ perUnit: 1.2 * 2 * 14, units: 6, simultaneityPct: 50, peak: '1.5' }));
+  assert.equal(r.recommendedId, 'c50');
+  assert.equal(opt(r, 50).substitute, false);
+  for (const size of [20, 10]) {
+    const o = opt(r, size);
+    assert.equal(o.available, true);
+    assert.equal(o.substitute, true);
+    assert.ok(o.total > 0);
+    // 代用値は表どおりの自動切替式の値より小さい（安全側）
+    assert.ok(o.generationKgh < opt(r, 50).generationKgh);
+  }
+  // 20kg: 単段 い号PP95 は連続使用のみ → 0.60、10kg: 単段 い号PP80 1.5時間 → 0.55
+  assert.equal(opt(r, 20).generationKgh, 0.60);
+  assert.equal(opt(r, 10).generationKgh, 0.55);
+});
+
+test('代用できる値もない条件は推奨なしで警告', () => {
+  const r = calculate(input({ gas: 'ro60', tempC: -10 }));
   assert.equal(r.recommendedId, null);
+  assert.ok(r.options.every(o => !o.available));
   assert.ok(r.warnings.length > 0);
 });
 

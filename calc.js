@@ -135,6 +135,42 @@
     return { value: v && ti >= 0 ? v[ti] : null, source: source };
   }
 
+  var GAS_ORDER = ['i95', 'i80', 'ro70', 'ro60'];
+  var PEAK_ORDER = ['0.5', '1', '1.5', '2', '3', '4', 'cont'];
+  function peakName(id) { return PEAKS.filter(function (p) { return p.id === id; })[0].name.replace(/（.*）/, ''); }
+  function gasName(id) { return GASES.filter(function (g) { return g.id === id; })[0].name; }
+
+  /*
+   * 表に該当条件の値がない場合、参考資料の中から安全側（ガス発生能力が小さくなる側）の値で代用する。
+   * 探す順番:
+   *   1. 選んだ調整器 → 自動切替式なら単段調整器の表（単段の方が発生能力は小さい）
+   *   2. 選んだガス → より低い規格のガス（PP% が低いほど発生能力は小さい）
+   *   3. 選んだピーク時間 → より長いピーク時間（長いほど発生能力は小さい）
+   * 戻り値: { value, source, substitute: boolean, basis: string }
+   */
+  function lookupGenerationSafe(regulator, sizeKg, gas, tempC, peak) {
+    var regs = regulator === 'auto' ? ['auto', 'single'] : ['single'];
+    var gases = GAS_ORDER.slice(GAS_ORDER.indexOf(gas));
+    var peaks = PEAK_ORDER.slice(PEAK_ORDER.indexOf(peak));
+    for (var r = 0; r < regs.length; r++) {
+      for (var g = 0; g < gases.length; g++) {
+        for (var p = 0; p < peaks.length; p++) {
+          var hit = lookupGeneration(regs[r], sizeKg, gases[g], tempC, peaks[p]);
+          if (hit.value === null) continue;
+          if (r === 0 && g === 0 && p === 0) {
+            return { value: hit.value, source: hit.source, substitute: false, basis: '' };
+          }
+          var parts = [];
+          if (r > 0) parts.push('単段調整器');
+          if (g > 0) parts.push(gasName(gases[g]));
+          if (p > 0) parts.push('ピーク時間' + peakName(peaks[p]));
+          return { value: hit.value, source: hit.source, substitute: true, basis: parts.join('・') + 'の値で代用' };
+        }
+      }
+    }
+    return { value: null, source: '', substitute: false, basis: '' };
+  }
+
   // 浮動小数の誤差で 2.0000000001 → 3 にならないようにする
   var EPS = 1e-9;
   function ceilSafe(x) { return Math.ceil(x - EPS); }
@@ -220,8 +256,11 @@
     var monthlyTotalKg = monthlyKgPerUnit === null ? null : monthlyKgPerUnit * input.units;
 
     var options = SIZES.map(function (size) {
-      var g = lookupGeneration(regulator, size, input.gas, input.tempC, input.peak);
-      var opt = { id: 'c' + size, sizeKg: size, name: size + 'kg容器', generationKgh: g.value, source: g.source };
+      var g = lookupGenerationSafe(regulator, size, input.gas, input.tempC, input.peak);
+      var opt = {
+        id: 'c' + size, sizeKg: size, name: size + 'kg容器',
+        generationKgh: g.value, source: g.source, substitute: g.substitute, basis: g.basis
+      };
       if (g.value === null) {
         opt.available = false;
         return opt;
@@ -257,20 +296,29 @@
     if (input.tempC <= -10 && input.peak !== '0.5') {
       notes.push('−10℃以下は寒冷地の参考表（50kg容器・自動切替式・い号ガスのみ）の値です。');
     }
+    if (available.some(function (o) { return o.substitute; })) {
+      notes.push('※印のガス発生能力は、選んだ条件のデータが参考資料にないため、資料内の安全側（発生能力が小さい側）の値で代用しています。');
+    }
     if (type.forceAuto && input.regulator === 'single') {
       notes.push('集団供給方式では自動切替式調整器を使用します。');
     }
 
     // 推奨: 業務用は50kg容器。それ以外は設置本数が最少の容器（同数なら大きい容器）。
+    // 表どおりの値がある容器を優先し、代用値だけの場合はその中から選ぶ。
+    var exact = available.filter(function (o) { return !o.substitute; });
+    var pool = exact.length ? exact : available;
     var recommended = null;
-    if (available.length) {
+    if (pool.length) {
       if (input.usage === 'business') {
         recommended = available.filter(function (o) { return o.sizeKg === 50; })[0] || null;
       } else {
-        recommended = available.slice().sort(function (a, b) {
+        recommended = pool.slice().sort(function (a, b) {
           return a.total - b.total || b.sizeKg - a.sizeKg;
         })[0];
       }
+    }
+    if (recommended && recommended.substitute) {
+      warnings.push('推奨構成のガス発生能力は代用値（' + recommended.basis + '）です。設計基準に照らして確認してください。');
     }
     if (!recommended) {
       warnings.push('選んだ条件（調整器・ガス・気温・ピーク時間）に該当するガス発生能力のデータが参考資料の表にありません。条件を見直してください。');
@@ -307,6 +355,7 @@
     SIZES: SIZES,
     TABLES: TABLES,
     lookupGeneration: lookupGeneration,
+    lookupGenerationSafe: lookupGenerationSafe,
     classify: classify,
     validate: validate,
     calculate: calculate
