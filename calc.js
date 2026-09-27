@@ -50,7 +50,11 @@
     { id: '4', name: '4時間' },
     { id: 'cont', name: '連続使用（5時間以上）' }
   ];
-  var SIZES = [50, 20, 10];
+  var SIZES = [50, 30, 20, 10];
+  // 自動切替式調整器で表示する容器（10kg容器は表示しない）
+  var AUTO_SIZES = [50, 30, 20];
+  // 参考資料に表がない容器は、より小さい容器の値で代用する（容器が小さいほど発生能力は小さい＝安全側）
+  var SIZE_SUBSTITUTE = { 30: 20 };
 
   // 値の並びは気温 [5, 0, -5] ℃。null はデータなし（表中の「－」）。
   var TABLES = {
@@ -146,25 +150,30 @@
    *   1. 選んだ調整器 → 自動切替式なら単段調整器の表（単段の方が発生能力は小さい）
    *   2. 選んだガス → より低い規格のガス（PP% が低いほど発生能力は小さい）
    *   3. 選んだピーク時間 → より長いピーク時間（長いほど発生能力は小さい）
+   *   4. 表がない容器（30kg）→ より小さい容器（20kg）の値で 1〜3 を探す
    * 戻り値: { value, source, substitute: boolean, basis: string }
    */
   function lookupGenerationSafe(regulator, sizeKg, gas, tempC, peak) {
     var regs = regulator === 'auto' ? ['auto', 'single'] : ['single'];
     var gases = GAS_ORDER.slice(GAS_ORDER.indexOf(gas));
     var peaks = PEAK_ORDER.slice(PEAK_ORDER.indexOf(peak));
-    for (var r = 0; r < regs.length; r++) {
-      for (var g = 0; g < gases.length; g++) {
-        for (var p = 0; p < peaks.length; p++) {
-          var hit = lookupGeneration(regs[r], sizeKg, gases[g], tempC, peaks[p]);
-          if (hit.value === null) continue;
-          if (r === 0 && g === 0 && p === 0) {
-            return { value: hit.value, source: hit.source, substitute: false, basis: '' };
+    var sizes = SIZE_SUBSTITUTE[sizeKg] ? [sizeKg, SIZE_SUBSTITUTE[sizeKg]] : [sizeKg];
+    for (var z = 0; z < sizes.length; z++) {
+      for (var r = 0; r < regs.length; r++) {
+        for (var g = 0; g < gases.length; g++) {
+          for (var p = 0; p < peaks.length; p++) {
+            var hit = lookupGeneration(regs[r], sizes[z], gases[g], tempC, peaks[p]);
+            if (hit.value === null) continue;
+            if (z === 0 && r === 0 && g === 0 && p === 0) {
+              return { value: hit.value, source: hit.source, substitute: false, basis: '' };
+            }
+            var parts = [];
+            if (z > 0) parts.push(sizes[z] + 'kg容器');
+            if (r > 0) parts.push('単段調整器');
+            if (g > 0) parts.push(gasName(gases[g]));
+            if (p > 0) parts.push('ピーク時間' + peakName(peaks[p]));
+            return { value: hit.value, source: hit.source, substitute: true, basis: parts.join('・') + 'の値で代用' };
           }
-          var parts = [];
-          if (r > 0) parts.push('単段調整器');
-          if (g > 0) parts.push(gasName(gases[g]));
-          if (p > 0) parts.push('ピーク時間' + peakName(peaks[p]));
-          return { value: hit.value, source: hit.source, substitute: true, basis: parts.join('・') + 'の値で代用' };
         }
       }
     }
@@ -255,7 +264,7 @@
       : null;
     var monthlyTotalKg = monthlyKgPerUnit === null ? null : monthlyKgPerUnit * input.units;
 
-    var options = SIZES.map(function (size) {
+    var options = (regulator === 'auto' ? AUTO_SIZES : SIZES).map(function (size) {
       var g = lookupGenerationSafe(regulator, size, input.gas, input.tempC, input.peak);
       var opt = {
         id: 'c' + size, sizeKg: size, name: size + 'kg容器',
@@ -353,6 +362,7 @@
     TEMPS: TEMPS,
     PEAKS: PEAKS,
     SIZES: SIZES,
+    AUTO_SIZES: AUTO_SIZES,
     TABLES: TABLES,
     lookupGeneration: lookupGeneration,
     lookupGenerationSafe: lookupGenerationSafe,

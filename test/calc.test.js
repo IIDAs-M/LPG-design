@@ -125,7 +125,7 @@ test('推奨以外の容器にも数値が出る（自動切替式の20kg・10kg
   const r = calculate(input({ perUnit: 1.2 * 2 * 14, units: 6, simultaneityPct: 50, peak: '1.5' }));
   assert.equal(r.recommendedId, 'c50');
   assert.equal(opt(r, 50).substitute, false);
-  for (const size of [20, 10]) {
+  for (const size of [30, 20]) {
     const o = opt(r, size);
     assert.equal(o.available, true);
     assert.equal(o.substitute, true);
@@ -133,9 +133,10 @@ test('推奨以外の容器にも数値が出る（自動切替式の20kg・10kg
     // 代用値は表どおりの自動切替式の値より小さい（安全側）
     assert.ok(o.generationKgh < opt(r, 50).generationKgh);
   }
-  // 20kg: 単段 い号PP95 は連続使用のみ → 0.60、10kg: 単段 い号PP80 1.5時間 → 0.55
+  // 20kg: 単段 い号PP95 は連続使用のみ → 0.60。30kg は表がないため 20kg の値で代用
   assert.equal(opt(r, 20).generationKgh, 0.60);
-  assert.equal(opt(r, 10).generationKgh, 0.55);
+  assert.equal(opt(r, 30).generationKgh, 0.60);
+  assert.ok(opt(r, 30).basis.startsWith('20kg容器'));
 });
 
 test('代用できる値もない条件は推奨なしで警告', () => {
@@ -180,4 +181,17 @@ test('1か月の消費量は m³/月 を既定とし、kg/月 も選べる', () 
   assert.equal(opt(kg, 50).exchange.label, '月3回');
   const m3b = calculate(input(Object.assign({ monthlyPerUnit: 10, kgPerM3: 2.5 }, base)));
   assert.equal(m3b.monthlyKgPerUnit, 25);
+});
+
+test('自動切替式は 50・30・20kg、単段は 50・30・20・10kg を表示する', () => {
+  const auto = calculate(input({ regulator: 'auto' }));
+  assert.deepEqual(auto.options.map(o => o.sizeKg), [50, 30, 20]);
+  const single = calculate(input({ regulator: 'single', gas: 'i80' }));
+  assert.deepEqual(single.options.map(o => o.sizeKg), [50, 30, 20, 10]);
+  // 単段・い号PP80・5℃・1時間: 30kg は 20kg の 1.35 で代用
+  assert.equal(opt(single, 30).generationKgh, 1.35);
+  assert.equal(opt(single, 30).substitute, true);
+  assert.equal(opt(single, 20).substitute, false);
+  // 30kg は容器が大きい分、貯蔵量が増える
+  assert.equal(opt(single, 30).storedKg, opt(single, 30).total * 30);
 });
