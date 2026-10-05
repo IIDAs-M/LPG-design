@@ -195,3 +195,37 @@ test('自動切替式は 50・30・20kg、単段は 50・30・20・10kg を表�
   // 30kg は容器が大きい分、貯蔵量が増える
   assert.equal(opt(single, 30).storedKg, opt(single, 30).total * 30);
 });
+
+test('容器サイズを指定すると、そのサイズで構成する', () => {
+  const base = { perUnit: 1.2 * 2 * 14, units: 6, simultaneityPct: 50, peak: '1.5' };
+  const auto = calculate(input(base));
+  assert.equal(auto.recommendedId, 'c50');
+  assert.equal(auto.preferredSize, null);
+  const p20 = calculate(input(Object.assign({ preferredSize: 20 }, base)));
+  assert.equal(p20.recommendedId, 'c20');
+  assert.equal(p20.preferredSize, 20);
+  assert.ok(p20.warnings.some(w => w.includes('指定した容器') && w.includes('代用値')));
+  // 他のサイズも比較用に計算される
+  assert.deepEqual(p20.options.map(o => o.sizeKg), [50, 30, 20]);
+});
+
+test('自動切替式で10kgを指定した場合は自動選定に戻して警告', () => {
+  const r = calculate(input({ preferredSize: 10 }));
+  assert.equal(r.preferredSize, null);
+  assert.equal(r.recommendedId, 'c50');
+  assert.ok(r.warnings.some(w => w.includes('10kg容器は自動切替式調整器では選べません')));
+});
+
+test('単段で10kgを指定できる、データがなければ推奨なし', () => {
+  const ok = calculate(input({ regulator: 'single', gas: 'i80', preferredSize: 10 }));
+  assert.equal(ok.recommendedId, 'c10');
+  const ng = calculate(input({ regulator: 'single', gas: 'i80', tempC: -10, preferredSize: 10 }));
+  assert.equal(ng.recommendedId, null);
+  assert.ok(ng.warnings.some(w => w.includes('計算できません')));
+});
+
+test('業務用で50kg以外を指定すると注記', () => {
+  const r = calculate(input({ usage: 'business', regulator: 'single', gas: 'i80', preferredSize: 20 }));
+  assert.equal(r.recommendedId, 'c20');
+  assert.ok(r.notes.some(n => n.includes('設置場所の制限')));
+});

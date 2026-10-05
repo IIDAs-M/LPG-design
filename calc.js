@@ -312,25 +312,45 @@
       notes.push('集団供給方式では自動切替式調整器を使用します。');
     }
 
-    // 推奨: 業務用は50kg容器。それ以外は設置本数が最少の容器（同数なら大きい容器）。
-    // 表どおりの値がある容器を優先し、代用値だけの場合はその中から選ぶ。
-    var exact = available.filter(function (o) { return !o.substitute; });
-    var pool = exact.length ? exact : available;
+    // 設置場所の制限などで容器サイズを指定した場合は、そのサイズで構成する。
+    var pref = input.preferredSize === undefined || input.preferredSize === null || input.preferredSize === 'auto'
+      ? null : Number(input.preferredSize);
+    var preferred = null;
+    if (pref !== null) {
+      preferred = options.filter(function (o) { return o.sizeKg === pref; })[0] || null;
+      if (!preferred) {
+        warnings.push(pref + 'kg容器は' + (regulator === 'auto' ? '自動切替式調整器' : 'この条件') + 'では選べません。設置本数が最少の容器を推奨します。');
+        pref = null;
+      } else if (!preferred.available) {
+        warnings.push('指定した' + preferred.name + 'は、選んだ条件のガス発生能力のデータが参考資料にないため計算できません。条件を見直してください。');
+      } else if (input.usage === 'business' && pref !== 50) {
+        notes.push('業務用の容器は原則として50kg容器とします。設置場所の制限により' + preferred.name + 'で計算しています。');
+      }
+    }
+
     var recommended = null;
-    if (pool.length) {
-      if (input.usage === 'business') {
-        recommended = available.filter(function (o) { return o.sizeKg === 50; })[0] || null;
-      } else {
-        recommended = pool.slice().sort(function (a, b) {
-          return a.total - b.total || b.sizeKg - a.sizeKg;
-        })[0];
+    if (pref !== null) {
+      recommended = preferred && preferred.available ? preferred : null;
+    } else {
+      // 推奨: 業務用は50kg容器。それ以外は設置本数が最少の容器（同数なら大きい容器）。
+      // 表どおりの値がある容器を優先し、代用値だけの場合はその中から選ぶ。
+      var exact = available.filter(function (o) { return !o.substitute; });
+      var pool = exact.length ? exact : available;
+      if (pool.length) {
+        if (input.usage === 'business') {
+          recommended = available.filter(function (o) { return o.sizeKg === 50; })[0] || null;
+        } else {
+          recommended = pool.slice().sort(function (a, b) {
+            return a.total - b.total || b.sizeKg - a.sizeKg;
+          })[0];
+        }
+      }
+      if (!recommended) {
+        warnings.push('選んだ条件（調整器・ガス・気温・ピーク時間）に該当するガス発生能力のデータが参考資料の表にありません。条件を見直してください。');
       }
     }
     if (recommended && recommended.substitute) {
-      warnings.push('推奨構成のガス発生能力は代用値（' + recommended.basis + '）です。設計基準に照らして確認してください。');
-    }
-    if (!recommended) {
-      warnings.push('選んだ条件（調整器・ガス・気温・ピーク時間）に該当するガス発生能力のデータが参考資料の表にありません。条件を見直してください。');
+      warnings.push((pref !== null ? '指定した容器' : '推奨構成') + 'のガス発生能力は代用値（' + recommended.basis + '）です。設計基準に照らして確認してください。');
     }
 
     return {
@@ -350,6 +370,7 @@
       monthlyTotalKg: monthlyTotalKg,
       options: options,
       recommendedId: recommended ? recommended.id : null,
+      preferredSize: pref,
       warnings: warnings,
       notes: notes
     };
