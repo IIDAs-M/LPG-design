@@ -145,39 +145,93 @@
   function gasName(id) { return GASES.filter(function (g) { return g.id === id; })[0].name; }
 
   /*
-   * 表に該当条件の値がない場合、参考資料の中から安全側（ガス発生能力が小さくなる側）の値で代用する。
-   * 探す順番:
-   *   1. 選んだ調整器 → 自動切替式なら単段調整器の表（単段の方が発生能力は小さい）
-   *   2. 選んだガス → より低い規格のガス（PP% が低いほど発生能力は小さい）
-   *   3. 選んだピーク時間 → より長いピーク時間（長いほど発生能力は小さい）
+   * 追加資料「LPガス 発生能力早見表」（プロパン・い号、残液約30%を想定した目安値）
+   * 設計基準の表に値がない条件を補うためだけに使う。
+   *   cont : 容器サイズ別 連続自然気化能力 気温 [20, 15, 10, 5, 0, -5, -10] ℃
+   *   peak50 : 50kg容器 ピーク時発生能力 気温 [5, 0, -5] ℃（1時間ピークは「4.8 - 5.0」等の幅の下限値）
+   */
+  var QUICK = {
+    temps: [20, 15, 10, 5, 0, -5, -10],
+    cont: {
+      10: [1.5, 1.3, 1.1, 0.9, 0.7, 0.5, 0.3],
+      20: [2.3, 2.0, 1.7, 1.4, 1.1, 0.8, 0.5],
+      50: [4.7, 4.2, 3.6, 3.0, 2.3, 1.7, 1.2]
+    },
+    peak50Temps: [5, 0, -5],
+    peak50: {
+      '1': [4.8, 3.8, 2.8],
+      '2': [4.2, 3.2, 2.4],
+      cont: [3.0, 2.3, 1.7]
+    }
+  };
+  var QUICK_SOURCE = '早見表（目安）';
+
+  // 早見表から引く。対象はい号ガス（PP95%以上）のみ。
+  function lookupQuick(sizeKg, gas, tempC, peak) {
+    if (gas !== 'i95') return null;
+    if (sizeKg === 50 && QUICK.peak50[peak]) {
+      var pi = QUICK.peak50Temps.indexOf(tempC);
+      if (pi >= 0) return QUICK.peak50[peak][pi];
+    }
+    if (peak === 'cont' && QUICK.cont[sizeKg]) {
+      var ti = QUICK.temps.indexOf(tempC);
+      if (ti >= 0) return QUICK.cont[sizeKg][ti];
+    }
+    return null;
+  }
+
+  /*
+   * ガス発生能力を決める。
+   *   1. 設計基準の表（表Ⅱ－4－1、表Ⅱ－4－2、寒冷地・短時間の参考表）に該当条件の値があればそれを使う
+   *   2. なければ早見表の同じ条件の値で補う（い号ガス PP95%以上のみ）
+   *   3. それもなければ安全側（ガス発生能力が小さくなる側）の値で代用する（※）
+   *      a. 早見表のより長いピーク時間（長いほど発生能力は小さい。連続使用の値は短いピークにも安全側）
+   *      b. 設計基準の表で、自動切替式なら単段調整器 → より低い規格のガス → より長いピーク時間
    *   4. 表がない容器（30kg）→ より小さい容器（20kg）の値で 1〜3 を探す
-   * 戻り値: { value, source, substitute: boolean, basis: string }
+   * 戻り値: { value, source, substitute: boolean, quick: boolean, basis: string }
    */
   function lookupGenerationSafe(regulator, sizeKg, gas, tempC, peak) {
     var regs = regulator === 'auto' ? ['auto', 'single'] : ['single'];
     var gases = GAS_ORDER.slice(GAS_ORDER.indexOf(gas));
     var peaks = PEAK_ORDER.slice(PEAK_ORDER.indexOf(peak));
     var sizes = SIZE_SUBSTITUTE[sizeKg] ? [sizeKg, SIZE_SUBSTITUTE[sizeKg]] : [sizeKg];
+
+    function result(value, source, quick, parts) {
+      return {
+        value: value, source: source, quick: quick,
+        substitute: parts.length > 0,
+        basis: parts.length ? parts.join('・') + 'の値で代用' : ''
+      };
+    }
+
     for (var z = 0; z < sizes.length; z++) {
+      var sizeParts = z > 0 ? [sizes[z] + 'kg容器'] : [];
+      // 1. 設計基準の表
+      var hit = lookupGeneration(regulator, sizes[z], gas, tempC, peak);
+      if (hit.value !== null) return result(hit.value, hit.source, false, sizeParts);
+      // 2・3a. 早見表（同じピーク時間 → より長いピーク時間）
+      for (var q = 0; q < peaks.length; q++) {
+        var qv = lookupQuick(sizes[z], gas, tempC, peaks[q]);
+        if (qv === null) continue;
+        return result(qv, QUICK_SOURCE, true, sizeParts.concat(q > 0 ? ['早見表のピーク時間' + peakName(peaks[q])] : []));
+      }
+      // 3b. 設計基準の表で安全側の値
       for (var r = 0; r < regs.length; r++) {
         for (var g = 0; g < gases.length; g++) {
           for (var p = 0; p < peaks.length; p++) {
-            var hit = lookupGeneration(regs[r], sizes[z], gases[g], tempC, peaks[p]);
-            if (hit.value === null) continue;
-            if (z === 0 && r === 0 && g === 0 && p === 0) {
-              return { value: hit.value, source: hit.source, substitute: false, basis: '' };
-            }
-            var parts = [];
-            if (z > 0) parts.push(sizes[z] + 'kg容器');
+            if (r === 0 && g === 0 && p === 0) continue;
+            var sub = lookupGeneration(regs[r], sizes[z], gases[g], tempC, peaks[p]);
+            if (sub.value === null) continue;
+            var parts = sizeParts.slice();
             if (r > 0) parts.push('単段調整器');
             if (g > 0) parts.push(gasName(gases[g]));
             if (p > 0) parts.push('ピーク時間' + peakName(peaks[p]));
-            return { value: hit.value, source: hit.source, substitute: true, basis: parts.join('・') + 'の値で代用' };
+            return result(sub.value, sub.source, false, parts);
           }
         }
       }
     }
-    return { value: null, source: '', substitute: false, basis: '' };
+    return { value: null, source: '', substitute: false, quick: false, basis: '' };
   }
 
   // 浮動小数の誤差で 2.0000000001 → 3 にならないようにする
@@ -268,7 +322,7 @@
       var g = lookupGenerationSafe(regulator, size, input.gas, input.tempC, input.peak);
       var opt = {
         id: 'c' + size, sizeKg: size, name: size + 'kg容器',
-        generationKgh: g.value, source: g.source, substitute: g.substitute, basis: g.basis
+        generationKgh: g.value, source: g.source, substitute: g.substitute, quick: g.quick, basis: g.basis
       };
       if (g.value === null) {
         opt.available = false;
@@ -305,6 +359,9 @@
     if (input.tempC <= -10 && input.peak !== '0.5') {
       notes.push('−10℃以下は寒冷地の参考表（50kg容器・自動切替式・い号ガスのみ）の値です。');
     }
+    if (available.some(function (o) { return o.quick; })) {
+      notes.push('「早見表（目安）」の値は、設計基準の表に値がない条件を追加資料「LPガス 発生能力早見表」（プロパン・い号、残液約30%の目安値）で補ったものです。');
+    }
     if (available.some(function (o) { return o.substitute; })) {
       notes.push('※印のガス発生能力は、選んだ条件のデータが参考資料にないため、資料内の安全側（発生能力が小さい側）の値で代用しています。');
     }
@@ -334,8 +391,10 @@
     } else {
       // 推奨: 業務用は50kg容器。それ以外は設置本数が最少の容器（同数なら大きい容器）。
       // 表どおりの値がある容器を優先し、代用値だけの場合はその中から選ぶ。
-      var exact = available.filter(function (o) { return !o.substitute; });
-      var pool = exact.length ? exact : available;
+      // 設計基準の値 → 早見表の値 → 代用値 の順に、使える容器の中から選ぶ。
+      var exact = available.filter(function (o) { return !o.substitute && !o.quick; });
+      var quickExact = available.filter(function (o) { return !o.substitute && o.quick; });
+      var pool = exact.length ? exact : quickExact.length ? quickExact : available;
       if (pool.length) {
         if (input.usage === 'business') {
           recommended = available.filter(function (o) { return o.sizeKg === 50; })[0] || null;
@@ -387,6 +446,8 @@
     TABLES: TABLES,
     lookupGeneration: lookupGeneration,
     lookupGenerationSafe: lookupGenerationSafe,
+    lookupQuick: lookupQuick,
+    QUICK: QUICK,
     classify: classify,
     validate: validate,
     calculate: calculate

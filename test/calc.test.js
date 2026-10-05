@@ -133,9 +133,10 @@ test('推奨以外の容器にも数値が出る（自動切替式の20kg・10kg
     // 代用値は表どおりの自動切替式の値より小さい（安全側）
     assert.ok(o.generationKgh < opt(r, 50).generationKgh);
   }
-  // 20kg: 単段 い号PP95 は連続使用のみ → 0.60。30kg は表がないため 20kg の値で代用
-  assert.equal(opt(r, 20).generationKgh, 0.60);
-  assert.equal(opt(r, 30).generationKgh, 0.60);
+  // 20kg: 設計基準にない → 早見表の連続使用 1.4（短いピークにも安全側）。30kg は 20kg の値で代用
+  assert.equal(opt(r, 20).generationKgh, 1.4);
+  assert.equal(opt(r, 20).quick, true);
+  assert.equal(opt(r, 30).generationKgh, 1.4);
   assert.ok(opt(r, 30).basis.startsWith('20kg容器'));
 });
 
@@ -228,4 +229,35 @@ test('業務用で50kg以外を指定すると注記', () => {
   const r = calculate(input({ usage: 'business', regulator: 'single', gas: 'i80', preferredSize: 20 }));
   assert.equal(r.recommendedId, 'c20');
   assert.ok(r.notes.some(n => n.includes('設置場所の制限')));
+});
+
+test('早見表は設計基準に値がない条件だけを補う', () => {
+  const { lookupGenerationSafe: L } = require('../calc.js');
+  // 設計基準にある値はそのまま（早見表の 3.0 ではなく表Ⅱ－4－1 の 2.50）
+  const std = L('auto', 50, 'i95', 5, 'cont');
+  assert.equal(std.value, 2.50);
+  assert.equal(std.quick, false);
+  // 自動切替式 20kg・連続使用・5℃ は設計基準にない → 早見表 1.4（代用ではない）
+  const q = L('auto', 20, 'i95', 5, 'cont');
+  assert.deepEqual([q.value, q.quick, q.substitute, q.source], [1.4, true, false, '早見表（目安）']);
+  // 単段 50kg・1.5時間 は設計基準・早見表とも値がない → 早見表の2時間ピーク 4.2 で代用
+  const p15 = L('single', 50, 'i95', 5, '1.5');
+  assert.deepEqual([p15.value, p15.quick, p15.substitute], [4.2, true, true]);
+  // 単段 10kg・い号PP95・1時間・0℃ → 早見表 連続 0.7 で代用
+  assert.equal(L('single', 10, 'i95', 0, '1').value, 0.7);
+  // 単段 50kg・−10℃ → 早見表 連続 1.2 で代用
+  assert.equal(L('single', 50, 'i95', -10, '1').value, 1.2);
+  // い号PP80 には早見表を使わない（従来どおり設計基準から安全側の値）
+  const i80 = L('auto', 20, 'i80', 5, '1.5');
+  assert.deepEqual([i80.value, i80.quick], [1.00, false]);
+  // 30kg は 20kg の値（早見表を含む）で代用
+  const c30 = L('auto', 30, 'i95', 5, 'cont');
+  assert.deepEqual([c30.value, c30.substitute], [1.4, true]);
+});
+
+test('推奨は設計基準の値がある容器を優先する', () => {
+  const r = calculate(input({ perUnit: 377.5 / 60, units: 60, peak: 'cont' }));
+  assert.equal(r.recommendedId, 'c50');
+  assert.equal(opt(r, 50).generationKgh, 2.50);
+  assert.ok(r.notes.some(n => n.includes('早見表')));
 });
